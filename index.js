@@ -26,10 +26,20 @@ const client = new MongoClient(uri, {
 async function run() {
     try {
         const menuCollections = client.db('bistroDB').collection('menu')
+        const usersCollections = client.db('bistroDB').collection('users')
         const reviewsCollections = client.db('bistroDB').collection('reviews')
         const cartsCollections = client.db('bistroDB').collection('carts')
         
         // db operation
+
+        // user related api
+        app.post('/users', async(req,res)=>{
+            const user = req.body;
+            const result = await usersCollections.insertOne(user)
+            res.send(result)
+        })
+
+
         // get menu data 
         app.get('/menu', async(req,res)=>{
             const result = await menuCollections.find().toArray();
