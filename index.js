@@ -3,7 +3,7 @@ const app = express()
 const cors = require('cors')
 require('dotenv').config()
 const port = process.env.PORT || 5000;
-const  jwt = require('jsonwebtoken');
+const jwt = require('jsonwebtoken');
 
 // middlewire
 app.use(cors())
@@ -30,78 +30,90 @@ async function run() {
         const usersCollections = client.db('bistroDB').collection('users')
         const reviewsCollections = client.db('bistroDB').collection('reviews')
         const cartsCollections = client.db('bistroDB').collection('carts')
-        
+
         // db operation
         // jwt related api
-        app.post('/jwt', async(req,res)=>{
-            const user  = req.body;
-            const token = jwt.sign(user,process.env.ACCESS_TOKEN_SECRET,{expiresIn: '7d'})
-            res.send({token})
+        app.post('/jwt', async (req, res) => {
+            const user = req.body;
+            const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '7d' })
+            res.send({ token })
 
         })
         // middle wire
         // varify token 
-        const varifyToken = (req,res,next)=>{
-            console.log('inside varify token ',req.headers.authorization);
-            if( !req.headers.authorization){
-                return res.status(401).send({message: 'forbidden access'})
+        const varifyToken = (req, res, next) => {
+            console.log('inside varify token ', req.headers.authorization);
+            if (!req.headers.authorization) {
+                return res.status(401).send({ message: 'forbidden access' })
             }
             const token = req.headers.authorization.split(' ')[1]
-            jwt.verify(token , process.env.ACCESS_TOKEN_SECRET, (err,decoded)=>{
-                if(err){
-                     return res.status(401).send({message: 'forbidden access'})
+            jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+                if (err) {
+                    return res.status(401).send({ message: 'forbidden access' })
                 }
                 req.decoded = decoded
                 next()
             })
         }
 
+        // verify admin 
+        const verifyAdmin = async (req, res, next) => {
+            const email = req.decoded?.email;
+            const query = { email: email }
+            const user = await usersCollections.findOne(query)
+            const isAdmin = user?.role === 'admin'
+            if (!isAdmin) {
+                return res.status(403).send({ message: 'Forbidden access' })
+            }
+            next()
+        }
+
         // user related api
-        app.get('/users', varifyToken,async(req,res)=>{
-            
-            const result = await usersCollections.find ().toArray()
+        app.get('/users', varifyToken,verifyAdmin, async (req, res) => {
+
+            const result = await usersCollections.find().toArray()
             res.send(result)
         })
 
-        app.get('/users/admin/:email', varifyToken, async(req,res)=>{
+        app.get('/users/admin/:email', varifyToken, async (req, res) => {
             const email = req.params.email;
-            if(email != req.decoded.email){
-                return res.status(401).send({message: 'unauthorize access'})
+            if (email != req.decoded.email) {
+                return res.status(401).send({ message: 'unauthorize access' })
             }
-            const query = {email : email}
+            const query = { email: email }
             const user = await usersCollections.findOne(query)
             let admin = false
-            if(user){
+            if (user) {
                 admin = user?.role === 'admin'
             }
-            res.send({admin})
+            res.send({ admin })
         })
 
-        app.delete('/users/:id', async(req,res)=>{
+        app.delete('/users/:id',varifyToken,verifyAdmin, async (req, res) => {
             const id = req.params.id;
-            const filter = {_id : new ObjectId(id)}
+            const filter = { _id: new ObjectId(id) }
             const result = await usersCollections.deleteOne(filter)
             res.send(result)
         })
-        app.patch('/users/admin/:id', async(req,res)=>{
-            const id  = req.params.id;
-            const filter = { _id: new ObjectId(id)}
+        app.patch('/users/admin/:id',varifyToken,verifyAdmin, async (req, res) => {
+            const id = req.params.id;
+            const filter = { _id: new ObjectId(id) }
             const updatedDoc = {
                 $set: {
                     role: 'admin'
                 }
             }
-            const result  = await usersCollections.updateOne(filter,updatedDoc)
+            const result = await usersCollections.updateOne(filter, updatedDoc)
             res.send(result)
         })
 
-        app.post('/users', async(req,res)=>{
+        app.post('/users', async (req, res) => {
             const user = req.body;
             // insert email if user doesnot exist
-            const query = {email : user.email}
+            const query = { email: user.email }
             const existUser = await usersCollections.findOne(query);
-            if(existUser){
-                return res.send({message: 'User already Exsit', insertedId: null})
+            if (existUser) {
+                return res.send({ message: 'User already Exsit', insertedId: null })
             }
             const result = await usersCollections.insertOne(user)
             res.send(result)
@@ -109,39 +121,39 @@ async function run() {
 
 
         // get menu data 
-        app.get('/menu', async(req,res)=>{
+        app.get('/menu', async (req, res) => {
             const result = await menuCollections.find().toArray();
             res.send(result)
         })
         // reviews 
-        app.get('/reviews', async(req,res)=>{
+        app.get('/reviews', async (req, res) => {
             const result = await reviewsCollections.find().toArray();
             res.send(result)
         })
 
-           // all carts
-        app.get('/carts',async (req,res)=>{
+        // all carts
+        app.get('/carts', async (req, res) => {
             const email = req.query.email;
-            const query = {email : email}
+            const query = { email: email }
             const result = await cartsCollections.find(query).toArray()
             res.send(result)
         })
 
         // carts collection
-        app.post('/carts',async(req,res)=>{
+        app.post('/carts', async (req, res) => {
             const cartItem = req.body;
             const result = await cartsCollections.insertOne(cartItem)
             res.send(result)
         })
         // delete cart item 
-        app.delete('/carts/:id', async(req,res)=>{
+        app.delete('/carts/:id', async (req, res) => {
             const id = req.params.id;
-            const query = {_id : new ObjectId(id)}
+            const query = { _id: new ObjectId(id) }
             const result = await cartsCollections.deleteOne(query)
             res.send(result)
         })
 
-     
+
 
         await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
