@@ -234,6 +234,32 @@ async function run() {
             res.send(result)
         })
 
+        // statistics
+        app.get('/admin-stats',varifyToken,verifyAdmin, async(req,res)=>{
+            const users = await usersCollections.estimatedDocumentCount()
+            const menuItem = await menuCollections.estimatedDocumentCount()
+            const orders = await paymentCollections.estimatedDocumentCount()
+            // have better way
+            // const payments = await paymentCollections.find().toArray()
+            // const revinue = payments.reduce((total, payment)=> total+ payment.price ,0)
+            
+
+            // using group
+            const result = await paymentCollections.aggregate([{
+                 $group: {
+                    _id: null,
+                    totalRevinue: {
+                        $sum : '$price'
+                    }
+                }
+            }]).toArray()
+
+            const revinue = result.length > 0 ? result[0].totalRevinue : 0;
+
+
+            res.send({ users ,menuItem , orders, revinue})
+        })
+
 
 
         await client.db("admin").command({ ping: 1 });
