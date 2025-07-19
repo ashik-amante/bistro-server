@@ -4,6 +4,7 @@ const cors = require('cors')
 require('dotenv').config()
 const port = process.env.PORT || 5000;
 const jwt = require('jsonwebtoken');
+const stripe = require('stripe')(process.env.STRIPE_SECRETKEY)
 
 // middlewire
 app.use(cors())
@@ -30,12 +31,13 @@ async function run() {
         const usersCollections = client.db('bistroDB').collection('users')
         const reviewsCollections = client.db('bistroDB').collection('reviews')
         const cartsCollections = client.db('bistroDB').collection('carts')
+        const paymentCollections = client.db('bistroDB').collection('payment')
 
         // db operation
         // jwt related api
         app.post('/jwt', async (req, res) => {
             const user = req.body;
-            const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '7d' })
+            const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '365d' })
             res.send({ token })
 
         })
@@ -125,15 +127,41 @@ async function run() {
             const result = await menuCollections.find().toArray();
             res.send(result)
         })
+
+        app.get('/menu/:id',async(req,res)=>{
+            const id  = req.params.id;
+            const query = {_id: new ObjectId(id)}
+            const result = await menuCollections.findOne(query)
+            res.send(result)
+        })
+
+
         app.post('/menu',varifyToken,verifyAdmin, async(req,res)=>{
             const item = req.body;
             const result = await menuCollections.insertOne(item)
             res.send(result)
         })
 
+        app.patch('/menu/:id',async(req,res)=>{
+            const id  = req.params.id;
+            const item = req.body;
+            const filter = { _id : new ObjectId(id)}
+            const updatedDoc = {
+                $set: {
+                    name: item.name,
+                    price: item.price,
+                    category: item.category,
+                    recipe: item.recipe,
+                    image: item.image
+                }
+            }
+            const result = await menuCollections.updateOne(filter,updatedDoc);
+            res.send(result)
+        })
+
         app.delete('/menu/:id', varifyToken,verifyAdmin, async(req,res)=>{
             const id = req.params.id;
-            const query = {_id: new ObjectId(id)}
+            const query = {_id :new ObjectId(id)}
             const result = await menuCollections.deleteOne(query)
             res.send(result)
         })
@@ -162,6 +190,47 @@ async function run() {
             const id = req.params.id;
             const query = { _id: new ObjectId(id) }
             const result = await cartsCollections.deleteOne(query)
+            res.send(result)
+        })
+
+        // payment stripe
+        // paynent intent
+
+        app.post('/create-payment-intent', async (req,res)=>{
+            const {price} = req.body;
+            const amount = parseInt(price*100)
+            console.log('amount' , amount);
+
+            const paymentIntent = await stripe.paymentIntents.create({
+                amount: amount,
+                currency : 'usd',
+                payment_method_types: ['card']
+            })
+            res.send({
+                clientSecret : paymentIntent.client_secret
+            })
+        })
+
+        app.post('/payments', async(req,res)=>{
+            const payment = req.body;
+            const paymentResult = await paymentCollections.insertOne(payment)
+
+            // care fully de;ete cart item
+            const query = {_id: {
+                $in: payment.cartIds.map(id=> new ObjectId(id))
+            }}
+            const deletResult = await cartsCollections.deleteMany(query)
+
+            res.send({paymentResult,deletResult})
+        })
+
+        app.get('/payments/:email', varifyToken, async(req,res)=>{
+            const email = req.params.email;
+            const query = {email : email}
+            if(email !== req.decoded.email){
+                return res.status(403).send({message: 'forbidden access'})
+            }
+            const result = await paymentCollections.find(query).toArray()
             res.send(result)
         })
 
