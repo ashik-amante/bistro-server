@@ -260,6 +260,55 @@ async function run() {
             res.send({ users ,menuItem , orders, revinue})
         })
 
+        // stats visualization using aggregate pipeline
+        app.get('/order-stats',varifyToken,verifyAdmin, async(req,res)=>{
+            const result = await paymentCollections.aggregate([
+                {
+                    $addFields:{
+                        menuItemIds:{
+                            $map:{
+                                input: '$menuItemIds',
+                                as: 'id',
+                                in: {$toObjectId : '$$id'}
+                            }
+                        }
+                    }
+                },
+                {
+                    $unwind: "$menuItemIds"
+                },
+
+                {
+                    $lookup: {
+                        from: 'menu',
+                        localField: 'menuItemIds',
+                        foreignField: '_id',
+                        as: 'menuItems'
+                    }
+                },
+                {
+                    $unwind: '$menuItems'
+                },
+                {
+                    $group: {
+                        _id: '$menuItems.category',
+                        quantity: { $sum: 1},
+                        revenue: {$sum: '$menuItems.price'}
+                    }
+                },
+                {
+                    $project:{
+                        _id: 0,
+                        category: '$_id',
+                        quantity: '$quantity',
+                        revenue: '$revenue'
+                    }
+                }
+            ]).toArray()
+            res.send(result)
+        })
+
+
 
 
         await client.db("admin").command({ ping: 1 });
