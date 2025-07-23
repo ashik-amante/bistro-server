@@ -330,3 +330,12 @@ app.get('/', (req, res) => {
 app.listen(port, () => {
     console.log(`port is running oon ${port}`);
 })
+
+// const port = process.env.PORT || 5000;
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(port, () => {
+    console.log(`Server running on port ${port}`);
+  });
+}
+
+module.exports = app;
